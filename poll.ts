@@ -34,7 +34,9 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error("Missing SUPABASE_URL or SUPABASE_ANON_KEY in environment variables");
+  throw new Error(
+    "Missing SUPABASE_URL or SUPABASE_ANON_KEY in environment variables",
+  );
 }
 
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -100,7 +102,7 @@ async function pollForNewTweets() {
         accountInfo.account_display_name,
         accountInfo.username,
         tweet.created_at,
-        tweet.full_text
+        tweet.full_text,
       );
 
       // Cache
@@ -122,7 +124,9 @@ async function pollForNewTweets() {
 /**
  * Fetch display name & username from the 'account' table.
  */
-async function fetchAccountInfo(account_id: string): Promise<AccountRow | null> {
+async function fetchAccountInfo(
+  account_id: string,
+): Promise<AccountRow | null> {
   const { data, error } = await supabaseClient
     .from<AccountRow>("account")
     .select("account_display_name, username")
@@ -143,34 +147,83 @@ async function printTweet(
   displayName: string,
   username: string,
   timestamp: string,
-  text: string
+  text: string,
 ) {
   try {
     const printerConnection = PrinterConnection.getInstance();
 
     // "Open" the printer for writing
-    await new Promise<void>((resolve) => printerConnection.client.open(resolve));
+    await new Promise<void>((resolve) =>
+      printerConnection.client.open((error) => {
+        if (error) {
+          console.error("Error opening printer:", error);
+          return;
+        }
+        resolve();
+      }),
+    );
 
-    // Print a line with:
-    //   Display Name (bold), (@username), timestamp
-    //   Then the tweet text.
+    // Calculate the number of characters that fit on one line
+    const charsPerLine = 72; // Adjust based on printer specs
+
+    // Wrap the tweet text
+    const wrappedText = wrapText(text, charsPerLine);
+
+    // Print header (display name, username, timestamp)
     printerConnection.printer
       .font("a")
-      .style("b") // bold style
+      .style("b")
       .size(1, 1)
       .text(`${displayName} (@${username})`)
-      .style("normal") // back to normal
+      .style("normal")
       .size(1, 1)
-      .text(new Date(timestamp).toLocaleString())
-      .text(text)
-      .cut();
+      .text(new Date(timestamp).toLocaleString());
 
-    // Send buffer, close the connection
+    // Print wrapped text
+    wrappedText.forEach((line) => {
+      printerConnection.printer.text(line);
+    });
+
+    printerConnection.printer.cut();
+
     await printerConnection.printer.flush();
     printerConnection.client.close();
   } catch (error) {
     console.error("Error printing tweet:", error);
   }
+}
+
+function wrapText(text: string, maxLength: number): string[] {
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let currentLine = "";
+
+  for (const word of words) {
+    if (currentLine.length + word.length + 1 <= maxLength) {
+      currentLine = currentLine ? `${currentLine} ${word}` : word;
+    } else {
+      if (currentLine) {
+        lines.push(currentLine);
+      }
+
+      if (word.length > maxLength) {
+        let remainingWord = word;
+        while (remainingWord.length > maxLength) {
+          lines.push(remainingWord.slice(0, maxLength));
+          remainingWord = remainingWord.slice(maxLength);
+        }
+        currentLine = remainingWord;
+      } else {
+        currentLine = word;
+      }
+    }
+  }
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines;
 }
 
 /**
@@ -184,7 +237,7 @@ async function loadCachedTweets() {
       seenTweets.set(t.tweet_id, t);
     }
     console.log(`Loaded ${arr.length} tweets from cache.`);
-  } catch (err: any) {
+  } catch (err: unknown) {
     // If file not found or invalid JSON, we treat as empty
     console.log("No existing tweets.json or parse error, starting fresh.");
   }

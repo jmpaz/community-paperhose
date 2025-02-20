@@ -1,4 +1,4 @@
-# tweet-hose
+# community paperhose
 
 To install dependencies:
 
@@ -9,7 +9,7 @@ bun install
 To run:
 
 ```bash
-bun run index.ts
+bun run poll.ts
 ```
 
-This project was created using `bun init` in bun v1.2.2. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
+Mashed up from code by [@DefenderOfBasic](https://x.com/defenderofbasic/), [@hzoo](https://x.com/left_pad)
